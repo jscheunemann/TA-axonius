@@ -275,9 +275,10 @@ class EntitySearch:
             raise Exception(f"Critical Error! Status Code: Exception: {ex}")
 
 class EventWriter:
-    def __init__(self, incremental_data_ingest=False, remove_fetch_time_field=False, checkpoint=None, host=None, source=None, index=None, sourcetype=None, helper=None, event_writer=None):
+    def __init__(self, incremental_data_ingest=False, remove_fetch_time_field=False, fetch_time_field_name=None, checkpoint=None, host=None, source=None, index=None, sourcetype=None, helper=None, event_writer=None):
         self._incremental_data_ingest = incremental_data_ingest
         self._remove_fetch_time_field = remove_fetch_time_field
+        self._fetch_time_field_name = fetch_time_field_name
         self._checkpoint = checkpoint
         self._host = host
         self._source = source
@@ -285,6 +286,7 @@ class EventWriter:
         self._sourcetype = sourcetype
         self._helper = helper
         self._event_writer = event_writer
+        self._checkpoint = checkpoint
         self._entity_count = 0
         self._entity_ids = []
         self._page = 0
@@ -307,20 +309,20 @@ class EventWriter:
                 
             if True == self._incremental_data_ingest:
                 # Create a timestamp from the devices fetch_time field
-                entity_fetch_time = datetime.datetime.strptime(entity[fetch_time_field_name], "%a, %d %b %Y %H:%M:%S %Z").timestamp()
+                entity_fetch_time = datetime.datetime.strptime(entity[self._fetch_time_field_name], "%a, %d %b %Y %H:%M:%S %Z").timestamp()
 
                 # Remove the fetch_time field if it was not part of the saved query's query_field definition
                 if True == self._remove_fetch_time_field:
-                    entity.pop(fetch_time_field_name)
+                    entity.pop(self._fetch_time_field_name)
 
                 # Create event
                 event = self._helper.new_event(source=self._source, host=self._host, index=self._index, sourcetype=self._sourcetype, data=json.dumps(entity))
 
                 # Add event if no checkpoint is defined yet, or if fetch time is greater than the checkpoint time
-                if checkpoint is None:
+                if self._checkpoint is None:
                     self._event_writer.write_event(event)
                     self._events_written += 1
-                elif entity_fetch_time > checkpoint:
+                elif entity_fetch_time > self._checkpoint:
                     self._event_writer.write_event(event)
                     self._events_written += 1
             else:
@@ -559,7 +561,7 @@ def collect_events(helper, ew):
                         remove_fetch_time_field = False
     
                 # Create EventWriter instance to process batches
-                event_writer = EventWriter(incremental_data_ingest=opt_incremental_data_ingest, remove_fetch_time_field=remove_fetch_time_field, checkpoint=checkpoint, host=host, source=helper.get_arg('name'), index=helper.get_output_index(), sourcetype=helper.get_sourcetype(), helper=helper, event_writer=ew)
+                event_writer = EventWriter(incremental_data_ingest=opt_incremental_data_ingest, remove_fetch_time_field=remove_fetch_time_field, fetch_time_field_name=fetch_time_field_name, checkpoint=checkpoint, host=host, source=helper.get_arg('name'), index=helper.get_output_index(), sourcetype=helper.get_sourcetype(), helper=helper, event_writer=ew)
             
                 # Reset retries and exception_thrown
                 retries = 0
